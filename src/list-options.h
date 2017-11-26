@@ -2,7 +2,7 @@
  * \file list-options.h
  * \brief options
  *
- * Currently, if there are more than 20 of any option type, the later ones
+ * Currently, if there are more than 21 of any option type, the later ones
  * will be ignored
  * Cheat options need to be followed by corresponding score options
  */
@@ -51,6 +51,8 @@ OP(mouse_movement,        "Allow mouse clicks to move the player",
 INTERFACE, true)
 OP(notify_recharge,       "Notify on object recharge",
 INTERFACE, false)
+OP(effective_speed,       "Show effective speed as multiplier",
+INTERFACE, false)
 OP(cheat_hear,            "Cheat: Peek into monster creation",
 CHEAT, false)
 OP(score_hear,            "Score: Peek into monster creation",
@@ -62,10 +64,6 @@ SCORE, false)
 OP(cheat_xtra,            "Cheat: Peek into something else",
 CHEAT, false)
 OP(score_xtra,            "Score: Peek into something else",
-SCORE, false)
-OP(cheat_know,            "Cheat: Know complete monster info",
-CHEAT, false)
-OP(score_know,            "Score: Know complete monster info",
 SCORE, false)
 OP(cheat_live,            "Cheat: Allow player to avoid death",
 CHEAT, false)
@@ -94,5 +92,9 @@ BIRTH, true)
 OP(birth_ai_learn,        "Monsters learn from their mistakes",
 BIRTH, false)
 OP(birth_know_runes,      "Know all runes on birth",
+BIRTH, false)
+OP(birth_know_flavors,    "Know all flavors on birth",
+BIRTH, false)
+OP(birth_levels_persist,  "Persistent levels (experimental)",
 BIRTH, false)
 

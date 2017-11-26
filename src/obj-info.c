@@ -1227,9 +1227,8 @@ static bool describe_light(textblock *tb, const struct object *obj,
 			else
 				textblock_append(tb, "  Cannot be refueled.");
 		}
+		textblock_append(tb, "\n");
 	}
-
-	textblock_append(tb, "\n");
 
 	return true;
 }
@@ -1254,7 +1253,7 @@ static bool obj_known_effect(const struct object *obj, struct effect **effect,
 	random_value timeout = {0, 0, 0, 0};
 	bool store_consumable = object_is_in_store(obj) && tval_is_useable(obj);
 
-	*effect = 0;
+	*effect = NULL;
 	*min_recharge = 0;
 	*max_recharge = 0;
 	*failure_chance = 0;
@@ -1265,13 +1264,12 @@ static bool obj_known_effect(const struct object *obj, struct effect **effect,
 		timeout = obj->time;
 		if (effect_aim(*effect))
 			*aimed = true;;
-	} else if (object_effect(obj)) {
+	} else if (object_effect(obj) && !tval_is_wearable(obj)) {
 		/* Don't know much - be vague */
 		*effect = NULL;
-
-		if (!obj->artifact && effect_aim(object_effect(obj)))
+		if (!obj->artifact && effect_aim(object_effect(obj))) {
 			*aimed = true;
-
+		}
 		return true;
 	} else {
 		/* No effect - no info */
@@ -1304,25 +1302,28 @@ static bool describe_effect(textblock *tb, const struct object *obj,
 	int min_time, max_time, failure_chance;
 
 	/* Sometimes we only print artifact activation info */
-	if (only_artifacts && !obj->artifact)
+	if (only_artifacts && !obj->artifact) {
 		return false;
+	}
 
 	if (obj_known_effect(obj, &effect, &aimed, &min_time, &max_time,
-							 &failure_chance) == false)
+						 &failure_chance) == false) {
 		return false;
+	}
 
 	/* Effect not known, mouth platitudes */
 	if (!effect && object_effect(obj)) {
-		if (aimed)
+		if (aimed) {
 			textblock_append(tb, "It can be aimed.\n");
-		else if (tval_is_edible(obj))
+		} else if (tval_is_edible(obj)) {
 			textblock_append(tb, "It can be eaten.\n");
-		else if (tval_is_potion(obj))
+		} else if (tval_is_potion(obj)) {
 			textblock_append(tb, "It can be drunk.\n");
-		else if (tval_is_scroll(obj))
+		} else if (tval_is_scroll(obj)) {
 			textblock_append(tb, "It can be read.\n");
-		else
+		} else {
 			textblock_append(tb, "It can be activated.\n");
+		}
 
 		return true;
 	}
@@ -1333,6 +1334,12 @@ static bool describe_effect(textblock *tb, const struct object *obj,
 		textblock_append(tb, obj->activation->desc);
 	} else {
 		int random_choices = 0;
+		bool random_breath = (effect && (effect->index == EF_RANDOM) &&
+							  effect->next &&
+							  (effect->next->index == EF_BREATH));
+		char breaths[120];
+
+		my_strcpy(breaths, "", sizeof(breaths));
 
 		/* Get descriptions for all the effects */
 		effect = object_effect(obj);
@@ -1457,9 +1464,28 @@ static bool describe_effect(textblock *tb, const struct object *obj,
 
 			/* Object generated breaths are elemental */
 			case EFINFO_BREATH: {
-				strnfmt(desc, sizeof(desc), effect_desc(effect),
-						projections[effect->params[0]].player_desc,
-						effect->params[1], dice_string);
+				/* Special treatment for several random breaths */
+				if (random_breath) {
+					my_strcat(breaths,
+							  projections[effect->params[0]].player_desc,
+							  sizeof(breaths));
+					if (random_choices > 3) {
+						my_strcat(breaths, ", ", sizeof(breaths));
+					} else if (random_choices == 3) {
+						my_strcat(breaths, " or ", sizeof(breaths));
+					}
+					random_choices--;
+
+					if ((!effect->next) || (effect->next->index != EF_BREATH)) {
+						random_breath = false;
+					}
+					strnfmt(desc, sizeof(desc), effect_desc(effect), breaths,
+							effect->params[1], dice_string);
+				} else {
+					strnfmt(desc, sizeof(desc), effect_desc(effect),
+							projections[effect->params[0]].player_desc,
+							effect->params[1], dice_string);
+				}
 				break;
 			}
 
@@ -1494,6 +1520,7 @@ static bool describe_effect(textblock *tb, const struct object *obj,
 			}
 
 			do {
+				if (random_breath && effect->index != EF_RANDOM) break;
 				if (isdigit((unsigned char) *next_char))
 					textblock_append_c(tb, COLOUR_L_GREEN, "%c", *next_char);
 				else
@@ -1503,7 +1530,10 @@ static bool describe_effect(textblock *tb, const struct object *obj,
 			/* Random choices need special treatment - note that this code
 			 * assumes that RANDOM and the random choices will be the last
 			 * effect in the object/activation description */
-			if (random_choices >= 1) {
+			if (random_breath) {
+				/* Handled in effect description */
+				;
+			} else if (random_choices >= 1) {
 				if (effect->index == EF_RANDOM)
 					;
 				else if (random_choices > 2)

@@ -776,16 +776,21 @@ void object_set_base_known(struct object *obj)
 	obj->known->number = obj->number;
 
 	/* Generic dice and ac, to_h for armor, and launcher multipliers */
-	if (!obj->known->dd)
+	if (!obj->known->dd) {
 		obj->known->dd = obj->kind->dd * player->obj_k->dd;
-	if (!obj->known->ds)
+	}
+	if (!obj->known->ds) {
 		obj->known->ds = obj->kind->ds * player->obj_k->ds;
-	if (!obj->known->ac)
+	}
+	if (!obj->known->ac) {
 		obj->known->ac = obj->kind->ac * player->obj_k->ac;
-	if (object_has_standard_to_h(obj))
+	}
+	if (object_has_standard_to_h(obj)) {
 		obj->known->to_h = obj->kind->to_h.base;
-	if (tval_is_launcher(obj))
+	}
+	if (tval_is_launcher(obj)) {
 		obj->known->pval = obj->pval;
+	}
 
 	/* Aware flavours and unflavored non-wearables get info now */
 	if ((obj->kind->aware && obj->kind->flavor) ||
@@ -795,8 +800,9 @@ void object_set_base_known(struct object *obj)
 	}
 
 	/* Know standard activations for wearables */
-	if (tval_is_wearable(obj) && obj->kind->effect)
+	if (tval_is_wearable(obj) && obj->kind->effect && obj->kind->aware) {
 		obj->known->effect = obj->effect;
+	}
 }
 
 /**
@@ -1272,7 +1278,7 @@ void player_learn_innate(struct player *p)
  *
  * \param p is the player
  */
-void player_learn_everything(struct player *p)
+void player_learn_all_runes(struct player *p)
 {
 	size_t i;
 
@@ -1465,12 +1471,12 @@ bool object_curses_find_flags(struct player *p, struct object *obj,
 					if (p->upkeep->playing) {
 						flag_message(flag, o_name);
 					}
+				}
 
-					/* Learn the curse */
-					index = rune_index(RUNE_VAR_CURSE, i);
-					if (index >= 0) {
-						player_learn_rune(p, index, true);
-					}
+				/* Learn the curse */
+				index = rune_index(RUNE_VAR_CURSE, i);
+				if (index >= 0) {
+					player_learn_rune(p, index, true);
 				}
 			}
 		}
@@ -1699,6 +1705,7 @@ void object_learn_on_use(struct player *p, struct object *obj)
 
 	object_flavor_aware(obj);
 	obj->known->effect = obj->effect;
+	update_player_object_knowledge(p);
 	player_exp_gain(p, (lev + (p->lev / 2)) / p->lev);
 
 	p->upkeep->notice |= PN_IGNORE;
@@ -1893,9 +1900,8 @@ void equip_learn_flag(struct player *p, int flag)
 	of_wipe(f);
 	of_on(f, flag);
 
-	/* No flag or already known */
+	/* No flag */
 	if (!flag) return;
-	if (of_has(p->obj_k->flags, flag)) return;
 
 	/* All wielded items eligible */
 	for (i = 0; i < p->body.count; i++) {
@@ -1905,18 +1911,20 @@ void equip_learn_flag(struct player *p, int flag)
 
 		/* Does the object have the flag? */
 		if (of_has(obj->flags, flag)) {
-			char o_name[80];
-			object_desc(o_name, sizeof(o_name), obj, ODESC_BASE);
-			flag_message(flag, o_name);
-			player_learn_rune(p, rune_index(RUNE_VAR_FLAG, flag), true);
-			return;
-		} else if (object_curses_find_flags(p, obj, f)) {
-			return;
+			if (!of_has(p->obj_k->flags, flag)) {
+				char o_name[80];
+				object_desc(o_name, sizeof(o_name), obj, ODESC_BASE);
+				flag_message(flag, o_name);
+				player_learn_rune(p, rune_index(RUNE_VAR_FLAG, flag), true);
+			}
 		} else if (!object_fully_known(obj)) {
 			/* Objects not fully known yet get marked as having had a chance
 			 * to display the flag */
 			of_on(obj->known->flags, flag);
 		}
+
+		/* Flag may be on a curse */
+		object_curses_find_flags(p, obj, f);
 	}
 }
 
@@ -1950,15 +1958,15 @@ void equip_learn_element(struct player *p, int element)
 
 			/* Learn the element properties */
 			player_learn_rune(p, rune_index(RUNE_VAR_RESIST, element), true);
-			return;
-		} else if (object_curses_find_element(p, obj, element)) {
-			return;
 		} else if (!object_fully_known(obj)) {
 			/* Objects not fully known yet get marked as having had a chance
 			 * to display the element */
 			obj->known->el_info[element].res_level = 1;
 			obj->known->el_info[element].flags = obj->el_info[element].flags;
 		}
+
+		/* Element may be on a curse */
+		object_curses_find_element(p, obj, element);
 	}
 }
 
@@ -2108,7 +2116,6 @@ void object_flavor_aware(struct object *obj)
 		}
 	}
 }
-
 
 /**
  * Mark an object's flavour as tried.

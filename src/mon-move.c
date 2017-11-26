@@ -966,7 +966,9 @@ static bool monster_turn_can_move(struct chunk *c, struct monster *mon,
 		return true;
 	} else if (square_iscloseddoor(c, ny, nx) ||
 			   square_issecretdoor(c, ny, nx)) {
-		bool may_bash = rf_has(mon->race->flags, RF_BASH_DOOR) && one_in_(2);
+		bool can_open = rf_has(mon->race->flags, RF_OPEN_DOOR);
+		bool can_bash = rf_has(mon->race->flags, RF_BASH_DOOR);
+		bool will_bash = false;
 
 		/* Take a turn */
 		*did_something = true;
@@ -977,31 +979,40 @@ static bool monster_turn_can_move(struct chunk *c, struct monster *mon,
 			rf_on(lore->flags, RF_BASH_DOOR);
 		}
 
-		/* Creature can open or bash doors */
-		if (!rf_has(mon->race->flags, RF_OPEN_DOOR) &&
-			!rf_has(mon->race->flags, RF_BASH_DOOR))
+		/* If creature can open or bash doors, make a choice */
+		if (can_open) {
+			/* Sometimes bash anyway (impatient) */
+			if (can_bash) {
+				will_bash = one_in_(2) ? true : false;
+			}
+		} else if (can_bash) {
+			/* Only choice */
+			will_bash = true;
+		} else {
+			/* Door is an insurmountable obstacle */
 			return false;
+		}
 
-		/* Stuck door -- try to unlock it */
+		/* Now outcome depends on type of door */
 		if (square_islockeddoor(c, ny, nx)) {
+			/* Locked door -- test monster strength against door strength */
 			int k = square_door_power(c, ny, nx);
-
 			if (randint0(mon->hp / 10) > k) {
-				if (may_bash)
+				if (will_bash) {
 					msg("%s slams against the door.", m_name);
-				else
+				} else {
 					msg("%s fiddles with the lock.", m_name);
+				}
 
 				/* Reduce the power of the door by one */
 				square_set_door_lock(c, ny, nx, k - 1);
 			}
 		} else {
-			/* Handle viewable doors */
+			/* Closed or secret door -- always open or bash */
 			if (square_isview(c, ny, nx))
 				player->upkeep->update |= (PU_UPDATE_VIEW | PU_MONSTERS);
 
-			/* Closed or secret door -- open or bash if allowed */
-			if (may_bash) {
+			if (will_bash) {
 				square_smash_door(c, ny, nx);
 
 				msg("You hear a door burst open!");
@@ -1009,7 +1020,7 @@ static bool monster_turn_can_move(struct chunk *c, struct monster *mon,
 
 				/* Fall into doorway */
 				return true;
-			} else if (rf_has(mon->race->flags, RF_OPEN_DOOR)) {
+			} else {
 				square_open_door(c, ny, nx);
 			}
 		}
@@ -1469,7 +1480,7 @@ static bool process_monster_timed(struct chunk *c, struct monster *mon)
 /**
  * Monster regeneration of HPs.
  */
-static void regen_monster(struct monster *mon)
+static void regen_monster(struct monster *mon, int num)
 {
 	/* Regenerate (if needed) */
 	if (mon->hp < mon->maxhp) {
@@ -1481,6 +1492,9 @@ static void regen_monster(struct monster *mon)
 
 		/* Some monsters regenerate quickly */
 		if (rf_has(mon->race->flags, RF_REGENERATE)) frac *= 2;
+
+		/* Multiply by number of regenerations */
+		frac *= num;
 
 		/* Regenerate */
 		mon->hp += frac;
@@ -1549,7 +1563,7 @@ void process_monsters(struct chunk *c, int minimum_energy)
 
 		/* Handle monster regeneration if requested */
 		if (regen)
-			regen_monster(mon);
+			regen_monster(mon, 1);
 
 		/* Calculate the net speed */
 		mspeed = mon->mspeed;
@@ -1613,5 +1627,38 @@ void reset_monsters(void)
 
 		/* Monster is ready to go again */
 		mflag_off(mon->mflag, MFLAG_HANDLED);
+	}
+}
+
+/**
+ * Allow monsters on a frozen persistent level to recover
+ */
+void restore_monsters(void)
+{
+	int i;
+	struct monster *mon;
+
+	/* Get the number of turns that have passed */
+	int num_turns = turn - cave->turn;
+
+	/* Process the monsters (backwards) */
+	for (i = cave_monster_max(cave) - 1; i >= 1; i--) {
+		int status, status_red;
+
+		/* Access the monster */
+		mon = cave_monster(cave, i);
+
+		/* Regenerate */
+		regen_monster(mon, num_turns / 100);
+
+		/* Handle timed effects */
+		status_red = num_turns * turn_energy(mon->mspeed) / z_info->move_energy;
+		if (status_red > 0) {
+			for (status = 0; status < MON_TMD_MAX; status++) {
+				if (mon->m_timed[status]) {
+					mon_dec_timed(mon, status, status_red, 0, false);
+				}
+			}
+		}
 	}
 }

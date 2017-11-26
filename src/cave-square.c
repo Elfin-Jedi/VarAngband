@@ -375,6 +375,13 @@ bool square_isplayer(struct chunk *c, int y, int x) {
 }
 
 /**
+ * True if the square contains the player or a monster
+ */
+bool square_isoccupied(struct chunk *c, int y, int x) {
+	return c->squares[y][x].mon != 0 ? true : false;
+}
+
+/**
  * True if the the player knows the terrain of the square
  */
 bool square_isknown(struct chunk *c, int y, int x) {
@@ -579,6 +586,18 @@ bool square_isopen(struct chunk *c, int y, int x) {
 bool square_isempty(struct chunk *c, int y, int x) {
 	if (square_isplayertrap(c, y, x)) return false;
 	return square_isopen(c, y, x) && !square_object(c, y, x);
+}
+
+/**
+ * True if the square is empty (an open square without any items).
+ */
+bool square_isarrivable(struct chunk *c, int y, int x) {
+	if (c->squares[y][x].mon) return false;
+	if (square_isplayertrap(c, y, x)) return false;
+	if (square_isfloor(c, y, x)) return true;
+	if (square_isstairs(c, y, x)) return true;
+	// maybe allow open doors or suchlike?
+	return false;
 }
 
 /**
@@ -829,9 +848,27 @@ bool square_isbelievedwall(struct chunk *c, int y, int x)
 	// the edge of the world is definitely gonna block things
 	if (!square_in_bounds_fully(c, y, x)) return true;
 	// if we dont know assume its projectable
-	if (!square_isknown(cave, y, x)) return false;
+	if (!square_isknown(c, y, x)) return false;
 	// report what we think (we may be wrong)
 	return !square_isprojectable(player->cave, y, x);
+}
+
+/**
+ * Checks if a square is in a cul-de-sac
+ */
+bool square_suits_stairs_well(struct chunk *c, int y, int x)
+{
+	return (square_num_walls_adjacent(c, y, x) == 3) &&
+		(square_num_walls_diagonal(c, y, x) == 4) && square_isempty(c, y, x);
+}
+
+/**
+ * Checks if a square is in a corridor
+ */
+bool square_suits_stairs_ok(struct chunk *c, int y, int x)
+{
+	return (square_num_walls_adjacent(c, y, x) == 2) &&
+		(square_num_walls_diagonal(c, y, x) == 4) && square_isempty(c, y, x);
 }
 
 
@@ -964,6 +1001,47 @@ void square_know_pile(struct chunk *c, int y, int x)
 
 
 /**
+ * Return how many cardinal directions around (x, y) contain walls.
+ * \param c current chunk
+ * \param y co-ordinates
+ * \param x co-ordinates
+ * \return the number of walls
+ */
+int square_num_walls_adjacent(struct chunk *c, int y, int x)
+{
+    int k = 0;
+    assert(square_in_bounds(c, y, x));
+
+    if (square_iswall(c, y + 1, x)) k++;
+    if (square_iswall(c, y - 1, x)) k++;
+    if (square_iswall(c, y, x + 1)) k++;
+    if (square_iswall(c, y, x - 1)) k++;
+
+    return k;
+}
+
+/**
+ * Return how many diagonal directions around (x, y) contain walls.
+ * \param c current chunk
+ * \param y co-ordinates
+ * \param x co-ordinates
+ * \return the number of walls
+ */
+int square_num_walls_diagonal(struct chunk *c, int y, int x)
+{
+    int k = 0;
+    assert(square_in_bounds(c, y, x));
+
+    if (square_iswall(c, y + 1, x + 1)) k++;
+    if (square_iswall(c, y - 1, x - 1)) k++;
+    if (square_iswall(c, y - 1, x + 1)) k++;
+    if (square_iswall(c, y + 1, x - 1)) k++;
+
+    return k;
+}
+
+
+/**
  * Set the terrain type for a square.
  *
  * This should be the only function that sets terrain, apart from the savefile
@@ -982,6 +1060,11 @@ void square_set_feat(struct chunk *c, int y, int x, int feat)
 
 	/* Make the change */
 	c->squares[y][x].feat = feat;
+
+	/* Light bright terrain */
+	if (feat_is_bright(feat)) {
+		sqinfo_on(c->squares[y][x].info, SQUARE_GLOW);
+	}
 
 	/* Make the new terrain feel at home */
 	if (character_dungeon) {

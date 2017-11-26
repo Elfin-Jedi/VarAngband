@@ -147,7 +147,14 @@ Notify on object recharge '[notify_recharge]'
   This causes the game to print a message when any rechargeable object
   (i.e. a rod or activatable weapon or armour item) finishes recharging. It
   is the equivalent of inscribing '{!!}' on all such items.  
-  
+
+.. _effective_speed:
+
+Show effective speed as multiplier '[effective_speed]'
+  Instead of showing absolute speed modifier (e.g. 'Slow (-2)' or 'Fast (+38)'),
+  show the effective rate at which the character is moving (e.g. 'Slow (x0.8)'
+  or 'Fast (x4.1)').
+
 
 Birth options
 =============
@@ -252,6 +259,19 @@ Player can recognize all object properties at birth '[birth_know_runes]'
   items.  This option means all object properties are known at the outset, so
   artifacts and ego items will identified on walking over them.
 
+.. _birth_know_flavors:
+
+Player can recognize all object flavors at birth '[birth_know_flavors]'
+  For players who don't enjoy the "identify by use" process for consumable
+  items.  This option means all object flavors are known at the outset.
+
+.. _birth_levels_persist:
+
+All dungeon levels are generated only once '[birth_levels_persist]'
+  Each level is generated for the first time when the player enters it, and 
+  from then on when the player returns the level is as they last saw it, 
+  includeing monsters, items and traps.
+
 Cheating options
 ================
 
@@ -269,11 +289,6 @@ Peek into dungeon creation '[cheat_room]'
 
 Peek into something else '[cheat_xtra]'
   Cheaters never win. But they can see debugging messages.
-
-.. _cheat_know:
-
-Know complete monster info '[cheat_know]'
-  Cheaters never win. But they can know all about monsters.
 
 .. _cheat_live:
 
